@@ -12,23 +12,22 @@ const server = http.createServer(app);
 // 1. Middleware
 app.use(cors());
 app.use(express.json());
-
-// Enable Static Files (Make uploads folder publicly accessible)
 app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 
-// 2. Database Connection (ROBUST CLOUD & LOCAL SUPPORT)
+// 2. Database Connection (WITH AUTO-CLEAN FIX)
 let poolConfig;
 
 if (process.env.DATABASE_URL) {
-    // ☁️ CLOUD CONFIGURATION (Render + Neon)
-    console.log("☁️ Connecting to Cloud Database...");
+    // 🧹 MAGIC FIX: Remove incompatible settings from the URL automatically
+    const cleanConnectionString = process.env.DATABASE_URL.split('?')[0];
+    
+    console.log("☁️  Connecting to Cloud Database (Auto-Cleaned)...");
     poolConfig = {
-        connectionString: process.env.DATABASE_URL,
-        ssl: { rejectUnauthorized: false } // Required for Neon
+        connectionString: cleanConnectionString, // Uses the cleaned URL
+        ssl: { rejectUnauthorized: false }       // Manually enables SSL
     };
 } else {
-    // 💻 LOCAL CONFIGURATION
-    console.log("💻 Connecting to Local Database...");
+    console.log("💻  Connecting to Local Database...");
     poolConfig = {
         user: process.env.DB_USER,
         host: process.env.DB_HOST,
@@ -40,10 +39,10 @@ if (process.env.DATABASE_URL) {
 
 const pool = new Pool(poolConfig);
 
-// 🛡️ CRITICAL: Prevent server crash on database connection loss
+// 🛡️ CRITICAL: Prevent server crash on idle connection errors
 pool.on('error', (err) => {
     console.error('❌ Unexpected Error on Idle Database Client', err);
-    process.exit(-1);
+    // Do not exit, just log it. This keeps the server alive.
 });
 
 pool.connect()
@@ -58,57 +57,28 @@ app.use('/api/appointments', require('./routes/appointmentRoutes'));
 app.use('/api/admin', require('./routes/adminRoutes'));
 app.use('/api/ai', require('./routes/aiRoutes'));
 
-// 4. Real-Time Engine (Socket.IO & WebRTC)
+// 4. Real-Time Engine
 const io = new Server(server, {
-    cors: {
-        origin: "*", // Allow connections from anywhere
-        methods: ["GET", "POST"]
-    }
+    cors: { origin: "*", methods: ["GET", "POST"] }
 });
 
 io.on('connection', (socket) => {
     console.log(`⚡ New Client Connected: ${socket.id}`);
-
-    // --- WebRTC Signaling Events ---
-
-    // A. Join Room
     socket.on('join-room', (roomId, userId) => {
         socket.join(roomId);
-        console.log(`User ${userId || 'Anon'} joined room: ${roomId}`);
-        
-        // Notify others
         socket.to(roomId).emit('user-connected', userId);
-
         socket.on('disconnect', () => {
-            console.log(`User ${userId} disconnected`);
             socket.to(roomId).emit('user-disconnected', userId);
         });
     });
-
-    // B. Offer
-    socket.on('offer', (payload) => {
-        io.to(payload.target).emit('offer', payload);
-    });
-
-    // C. Answer
-    socket.on('answer', (payload) => {
-        io.to(payload.target).emit('answer', payload);
-    });
-
-    // D. ICE Candidate
-    socket.on('ice-candidate', (incoming) => {
-        io.to(incoming.target).emit('ice-candidate', incoming.candidate);
-    });
-
-    // --- E. NEW: Text Chat ---
-    socket.on('send-message', (data) => {
-        // Broadcast to everyone ELSE in the room
-        socket.to(data.roomId).emit('receive-message', data);
-    });
+    socket.on('offer', (payload) => io.to(payload.target).emit('offer', payload));
+    socket.on('answer', (payload) => io.to(payload.target).emit('answer', payload));
+    socket.on('ice-candidate', (incoming) => io.to(incoming.target).emit('ice-candidate', incoming.candidate));
+    socket.on('send-message', (data) => socket.to(data.roomId).emit('receive-message', data));
 });
 
 // 5. Start Server
 const PORT = process.env.PORT || 5000;
 server.listen(PORT, () => {
-    console.log(`🚀 Server (HTTP + Socket) running on port ${PORT}`);
+    console.log(`🚀 Server running on port ${PORT}`);
 });
