@@ -16,7 +16,7 @@ app.use(express.json());
 // Enable Static Files (Make uploads folder publicly accessible)
 app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 
-// 2. Database Connection (UPDATED FOR CLOUD & LOCAL)
+// 2. Database Connection (ROBUST CLOUD & LOCAL SUPPORT)
 let poolConfig;
 
 if (process.env.DATABASE_URL) {
@@ -24,7 +24,7 @@ if (process.env.DATABASE_URL) {
     console.log("☁️ Connecting to Cloud Database...");
     poolConfig = {
         connectionString: process.env.DATABASE_URL,
-        ssl: { rejectUnauthorized: false } // Critical for Neon
+        ssl: { rejectUnauthorized: false } // Required for Neon
     };
 } else {
     // 💻 LOCAL CONFIGURATION
@@ -39,6 +39,12 @@ if (process.env.DATABASE_URL) {
 }
 
 const pool = new Pool(poolConfig);
+
+// 🛡️ CRITICAL: Prevent server crash on database connection loss
+pool.on('error', (err) => {
+    console.error('❌ Unexpected Error on Idle Database Client', err);
+    process.exit(-1);
+});
 
 pool.connect()
     .then(() => console.log('✅ Connected to PostgreSQL Database!'))
