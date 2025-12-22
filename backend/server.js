@@ -12,10 +12,10 @@ const server = http.createServer(app);
 // 1. Middleware
 app.use(cors());
 app.use(express.json());
+// Serve static files (uploads)
 app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 
-// 2. Database Connection (HARDCODED FOR SUCCESS)
-// We are bypassing process.env to force it to work.
+// 2. Database Connection (HARDCODED TO FORCE CONNECTION)
 const pool = new Pool({
     user: 'neondb_owner',
     host: 'ep-sparkling-unit-a117ntvv-pooler.ap-southeast-1.aws.neon.tech',
@@ -27,9 +27,9 @@ const pool = new Pool({
     }
 });
 
-// 🛡️ Anti-Crash Handler
+// 🛡️ CRITICAL: Prevent server crash if database connection drops
 pool.on('error', (err) => {
-    console.error('❌ Database Error:', err);
+    console.error('❌ Database Error (preventing crash):', err);
 });
 
 pool.connect()
@@ -44,7 +44,7 @@ app.use('/api/appointments', require('./routes/appointmentRoutes'));
 app.use('/api/admin', require('./routes/adminRoutes'));
 app.use('/api/ai', require('./routes/aiRoutes'));
 
-// 4. Real-Time Engine
+// 4. Real-Time Engine (Socket.IO)
 const io = new Server(server, {
     cors: { origin: "*", methods: ["GET", "POST"] }
 });
@@ -58,7 +58,7 @@ io.on('connection', (socket) => {
             socket.to(roomId).emit('user-disconnected', userId);
         });
     });
-    // ... (Keep existing socket logic if needed, or minimal is fine)
+    // WebRTC Signaling
     socket.on('offer', (payload) => io.to(payload.target).emit('offer', payload));
     socket.on('answer', (payload) => io.to(payload.target).emit('answer', payload));
     socket.on('ice-candidate', (incoming) => io.to(incoming.target).emit('ice-candidate', incoming.candidate));
