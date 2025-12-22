@@ -1,20 +1,23 @@
-// backend/controllers/authController.js
 const { Pool } = require('pg');
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 require('dotenv').config();
 
-// Database Connection
+// 🛑 HARDCODED DATABASE CONNECTION (The "Nuclear Option")
+// This ensures Registration works on Render, no matter what.
 const pool = new Pool({
-    user: process.env.DB_USER,
-    host: process.env.DB_HOST,
-    database: process.env.DB_NAME,
-    password: process.env.DB_PASSWORD,
-    port: process.env.DB_PORT,
+    user: 'neondb_owner',
+    host: 'ep-sparkling-unit-a117ntvv-pooler.ap-southeast-1.aws.neon.tech',
+    database: 'neondb',
+    password: 'npg_q2uQT4AYbBij',
+    port: 5432,
+    ssl: {
+        rejectUnauthorized: false
+    }
 });
 
 exports.register = async (req, res) => {
-    // 1. Get data from the frontend (Postman for now)
+    // 1. Get data from the frontend
     const { full_name, email, password, role } = req.body;
 
     try {
@@ -34,10 +37,10 @@ exports.register = async (req, res) => {
             [full_name, email, password_hash, role]
         );
 
-        // 5. Generate a Token (The digital key)
+        // 5. Generate a Token
         const token = jwt.sign(
             { id: newUser.rows[0].id, role: role },
-            'secret_key_123', // In a real app, put this in .env
+            'secret_key_123', 
             { expiresIn: '1h' }
         );
 
@@ -48,8 +51,6 @@ exports.register = async (req, res) => {
         res.status(500).send('Server Error');
     }
 };
-
-// ... existing register code is above this ...
 
 exports.login = async (req, res) => {
     const { email, password } = req.body;
