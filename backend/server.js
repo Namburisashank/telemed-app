@@ -14,40 +14,27 @@ app.use(cors());
 app.use(express.json());
 app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 
-// 2. Database Connection (WITH AUTO-CLEAN FIX)
-let poolConfig;
+// 2. Database Connection (HARDCODED FOR SUCCESS)
+// We are bypassing process.env to force it to work.
+const pool = new Pool({
+    user: 'neondb_owner',
+    host: 'ep-sparkling-unit-a117ntvv-pooler.ap-southeast-1.aws.neon.tech',
+    database: 'neondb',
+    password: 'npg_q2uQT4AYbBij',
+    port: 5432,
+    ssl: {
+        rejectUnauthorized: false
+    }
+});
 
-if (process.env.DATABASE_URL) {
-    // 🧹 MAGIC FIX: Remove incompatible settings from the URL automatically
-    const cleanConnectionString = process.env.DATABASE_URL.split('?')[0];
-    
-    console.log("☁️  Connecting to Cloud Database (Auto-Cleaned)...");
-    poolConfig = {
-        connectionString: cleanConnectionString, // Uses the cleaned URL
-        ssl: { rejectUnauthorized: false }       // Manually enables SSL
-    };
-} else {
-    console.log("💻  Connecting to Local Database...");
-    poolConfig = {
-        user: process.env.DB_USER,
-        host: process.env.DB_HOST,
-        database: process.env.DB_NAME,
-        password: process.env.DB_PASSWORD,
-        port: process.env.DB_PORT,
-    };
-}
-
-const pool = new Pool(poolConfig);
-
-// 🛡️ CRITICAL: Prevent server crash on idle connection errors
+// 🛡️ Anti-Crash Handler
 pool.on('error', (err) => {
-    console.error('❌ Unexpected Error on Idle Database Client', err);
-    // Do not exit, just log it. This keeps the server alive.
+    console.error('❌ Database Error:', err);
 });
 
 pool.connect()
     .then(() => console.log('✅ Connected to PostgreSQL Database!'))
-    .catch(err => console.error('❌ Connection error', err.stack));
+    .catch(err => console.error('❌ Connection error', err));
 
 // 3. API Routes
 app.use('/api/auth', require('./routes/authRoutes'));
@@ -71,6 +58,7 @@ io.on('connection', (socket) => {
             socket.to(roomId).emit('user-disconnected', userId);
         });
     });
+    // ... (Keep existing socket logic if needed, or minimal is fine)
     socket.on('offer', (payload) => io.to(payload.target).emit('offer', payload));
     socket.on('answer', (payload) => io.to(payload.target).emit('answer', payload));
     socket.on('ice-candidate', (incoming) => io.to(incoming.target).emit('ice-candidate', incoming.candidate));
